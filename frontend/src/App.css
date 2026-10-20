@@ -1,0 +1,189 @@
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: #17243a;
+  background:
+    radial-gradient(ellipse at 85% 15%, #e2ecff 0, transparent 35%),
+    #f7f9fc;
+}
+
+.site-header {
+  width: min(1120px, calc(100% - 48px));
+  margin: 0 auto;
+  min-height: 88px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  color: #fff;
+  background: #2457d6;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 750;
+  letter-spacing: -0.6px;
+}
+
+.header-label {
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 80px 24px;
+}
+
+.hero {
+  width: min(760px, 100%);
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0 0 20px;
+  color: #2457d6;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.hero h1 {
+  max-width: 760px;
+  margin: 0;
+  color: #17243a;
+  font-size: clamp(38px, 6vw, 64px);
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -2.8px;
+}
+
+.hero h1 span {
+  display: block;
+  color: #2457d6;
+}
+
+.hero-description {
+  max-width: 610px;
+  margin: 26px 0 0;
+  color: #5c6b80;
+  font-size: 18px;
+  line-height: 1.8;
+}
+
+.status-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  max-width: 610px;
+  margin-top: 38px;
+  padding: 24px;
+  border: 1px solid #dce5f3;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 32px rgba(32, 56, 96, 0.06);
+}
+
+.status-indicator {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border-radius: 50%;
+  background: #d99a24;
+  box-shadow: 0 0 0 4px #fff3d7;
+}
+
+.status-card h2 {
+  margin: 0 0 8px;
+  color: #17243a;
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.status-card p {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.site-footer {
+  width: min(1120px, calc(100% - 48px));
+  margin: 0 auto;
+  padding: 24px 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #e2e8f0;
+  color: #718096;
+  font-size: 12px;
+}
+
+.site-footer span:first-child {
+  color: #43516a;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .site-header {
+    width: calc(100% - 32px);
+    min-height: 72px;
+  }
+
+  .brand-name {
+    font-size: 18px;
+  }
+
+  .header-label {
+    max-width: 100px;
+    text-align: right;
+    font-size: 12px;
+  }
+
+  main {
+    padding: 64px 20px;
+  }
+
+  .hero h1 {
+    letter-spacing: -1.8px;
+  }
+
+  .hero-description {
+    font-size: 16px;
+  }
+
+  .status-card {
+    padding: 20px;
+  }
+
+  .site-footer {
+    width: calc(100% - 32px);
+    flex-direction: column;
+    gap: 6px;
+  }
+}
