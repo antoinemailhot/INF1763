@@ -1,0 +1,11 @@
+# Propriétaire par défaut de tout le dépôt
+*            @antoinemailhot
+
+# Interface utilisateur
+/frontend/   @Racm30uqo
+
+# API et stockage
+/backend/    @antoinemailhot
+
+# Configuration GitHub (modèles, CODEOWNERS)
+/.github/    @antoinemailhot @Racm30uqo
