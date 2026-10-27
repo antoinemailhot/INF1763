@@ -55,3 +55,52 @@ test("GET /health retourne HTTP 200 et le statut OK", async () => {
     status: "ok",
   });
 });
+
+test("POST /tasks retourne HTTP 400 si le titre est absent", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ description: "Une description" }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("POST /tasks retourne HTTP 400 si le titre n'est pas une chaîne", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: 123, description: "Une description" }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("POST /tasks retourne HTTP 400 si la description n'est pas une chaîne", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Une tâche", description: false }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("POST /tasks retourne HTTP 201 si le titre et la description sont des chaînes", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Une tâche",
+      description: "Une description",
+    }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.deepEqual(body, {
+    title: "Une tâche",
+    description: "Une description",
+  });
+});
