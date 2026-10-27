@@ -187,3 +187,19 @@ main {
     gap: 6px;
   }
 }
+
+/* États de disponibilité de l'API */
+.status-indicator--loading {
+  background: #d99a24;
+  box-shadow: 0 0 0 4px #fff3d7;
+}
+
+.status-indicator--available {
+  background: #16803c;
+  box-shadow: 0 0 0 4px #dcfce7;
+}
+
+.status-indicator--unavailable {
+  background: #dc2626;
+  box-shadow: 0 0 0 4px #fee2e2;
+}

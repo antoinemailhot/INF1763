@@ -5,9 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "test": "tsx --test src/server.test.ts",
-    "dev": "tsx watch src/server.ts",
+    "dev": "node --env-file=.env --import tsx --watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
+    "start": "node --env-file=.env dist/server.js",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [],

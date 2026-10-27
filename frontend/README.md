@@ -2,56 +2,74 @@
 
 ## Rôle
 
-Ce dossier contient l'interface web de PrêtMatériel, une application de gestion du prêt de matériel. Il est développé avec React, TypeScript et Vite.
+Interface web de PrêtMatériel développée avec React, TypeScript et Vite. Le frontend constitue la couche de présentation; l'API REST est un composant distinct.
 
-Le frontend constitue la couche de présentation de l'application. L'API REST et la base de données sont des composants distincts du projet et ne sont pas initialisés dans cette user story.
-
-## Prérequis
+## Prérequis et installation
 
 - Node.js
 - npm
 
-## Installation
+Depuis la racine du dépôt, installer les dépendances :
 
-Depuis ce dossier, installer les dépendances du projet :
+    npm --prefix frontend install
+    npm --prefix backend install
 
-```bash
-npm install
-```
+Les fichiers `package-lock.json` sont versionnés pour verrouiller les versions des dépendances.
 
-Le fichier `package-lock.json` est versionné afin de verrouiller les versions des dépendances.
+## Configuration
+
+Créer les fichiers de configuration locaux à partir des exemples, depuis la racine du dépôt :
+
+    Copy-Item frontend/.env.example frontend/.env
+    Copy-Item backend/.env.example backend/.env
+
+Les fichiers `.env` locaux sont ignorés par Git.
+
+Le frontend utilise `VITE_API_BASE_URL` pour déterminer l'URL de base de l'API. En développement local, sa valeur `/api` utilise le proxy Vite, qui transmet les requêtes à `http://localhost:3000` en retirant le préfixe `/api`.
+
+Le frontend utilise le port `5173` et refuse de démarrer si celui-ci est occupé. Le backend utilise le port `3000` par défaut, configurable avec `PORT`.
+
+Pour une compilation destinée à la production, définir `VITE_API_BASE_URL` avec l'URL accessible de l'API avant de lancer le build. Cette variable doit être définie en production. Le proxy Vite est uniquement destiné au développement.
+
+Ne place aucun secret dans une variable `VITE_` : ces valeurs sont intégrées au code client.
 
 ## Démarrage en développement
 
-Lancer le serveur de développement :
+Dans un premier terminal, démarrer le backend :
 
-```bash
-npm run dev
-```
+    npm --prefix backend run dev
 
-Ouvrir dans le navigateur l'adresse indiquée par Vite, généralement `http://localhost:5173/`.
+Dans un deuxième terminal, démarrer le frontend :
+
+    npm --prefix frontend run dev
+
+Ouvrir `http://localhost:5173/`.
+
+L'indicateur de statut de la page confirme si l'API répond correctement à la route `/health`.
+
+## Appels à l'API
+
+Tous les appels réseau à l'API doivent passer par `src/api.ts`, qui expose `apiFetch` :
+
+    import { apiFetch } from './api'
+
+    const response = await apiFetch('/health')
 
 ## Vérifications
 
-Vérifier le code avec ESLint :
+Depuis la racine du dépôt :
 
-```bash
-npm run lint
-```
+    npm --prefix frontend run lint
+    npm --prefix frontend run build
+    npm --prefix backend test
+    npm --prefix backend run typecheck
+    npm --prefix backend run build
 
-Vérifier les types TypeScript et produire le build de production :
+Pour prévisualiser le build du frontend :
 
-```bash
-npm run build
-```
+    npm --prefix frontend run preview
 
-Les fichiers compilés sont générés dans `dist/`, un dossier qui n'a pas à être versionné.
-
-Pour prévisualiser le build localement :
-
-```bash
-npm run preview
-```
+Les fichiers compilés sont générés dans `dist/` et ne doivent pas être versionnés.
 
 ## Technologies
 
@@ -59,7 +77,4 @@ npm run preview
 - TypeScript
 - Vite
 - ESLint
-
-## Portée actuelle
-
-Cette initialisation fournit une interface web de base et son environnement de développement. Les fonctionnalités métier de gestion des équipements, des emprunteurs et des prêts seront développées dans les user stories correspondantes.
+- Express
