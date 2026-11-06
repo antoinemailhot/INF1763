@@ -4,6 +4,16 @@ export const app = express();
 
 const port = Number(process.env.PORT ?? 3000);
 
+// Journalise chaque requête lorsque la réponse HTTP est terminée.
+app.use((req, res, next) => {
+  res.on("finish", () => {
+    console.log(`${req.method} ${req.originalUrl} - ${res.statusCode}`);
+  });
+
+  next();
+});
+
+// Analyse les corps des requêtes JSON.
 app.use(express.json());
 
 app.get("/", (_req, res) => {

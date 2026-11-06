@@ -6,6 +6,25 @@ import { app } from "./server.js";
 let server: Server;
 let baseUrl: string;
 
+// Capture les journaux produits pendant une requête.
+async function captureLogs<T>(
+  action: () => Promise<T>,
+): Promise<{ result: T; logs: string[] }> {
+  const logs: string[] = [];
+  const originalLog = console.log;
+
+  console.log = (...args: unknown[]) => {
+    logs.push(args.map(String).join(" "));
+  };
+
+  try {
+    const result = await action();
+    return { result, logs };
+  } finally {
+    console.log = originalLog;
+  }
+}
+
 before(async () => {
   server = app.listen(0);
 
@@ -103,4 +122,35 @@ test("POST /tasks retourne HTTP 201 si le titre et la description sont des chaî
     title: "Une tâche",
     description: "Une description",
   });
+});
+
+test("Journalise GET /health avec le statut HTTP 200", async () => {
+  const { result: response, logs } = await captureLogs(() =>
+    fetch(`${baseUrl}/health`),
+  );
+
+  assert.equal(response.status, 200);
+  assert.ok(logs.includes("GET /health - 200"));
+});
+
+test("Journalise une route inexistante avec le statut HTTP 404", async () => {
+  const { result: response, logs } = await captureLogs(() =>
+    fetch(`${baseUrl}/route-inexistante`),
+  );
+
+  assert.equal(response.status, 404);
+  assert.ok(logs.includes("GET /route-inexistante - 404"));
+});
+
+test("Journalise POST /tasks avec le statut HTTP 400", async () => {
+  const { result: response, logs } = await captureLogs(() =>
+    fetch(`${baseUrl}/tasks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: 123, description: "Une description" }),
+    }),
+  );
+
+  assert.equal(response.status, 400);
+  assert.ok(logs.includes("POST /tasks - 400"));
 });
