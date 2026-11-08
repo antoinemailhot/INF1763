@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { Server } from "node:http";
-import { app } from "./server.js";
+import { createDatabase } from "./database.js";
+import { createApp } from "./server.js";
+
+const database = createDatabase(":memory:");
+const app = createApp(database);
 
 let server: Server;
 let baseUrl: string;
@@ -52,6 +56,8 @@ after(async () => {
       }
     });
   });
+
+  database.close();
 });
 
 test("GET / retourne HTTP 200 et les informations de l'API", async () => {
@@ -73,6 +79,14 @@ test("GET /health retourne HTTP 200 et le statut OK", async () => {
   assert.deepEqual(body, {
     status: "ok",
   });
+});
+
+test("GET /tasks retourne une liste vide si aucune tâche n'existe", async () => {
+  const response = await fetch(`${baseUrl}/tasks`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, []);
 });
 
 test("POST /tasks retourne HTTP 400 si le titre est absent", async () => {
@@ -105,7 +119,7 @@ test("POST /tasks retourne HTTP 400 si la description n'est pas une chaîne", as
   assert.equal(response.status, 400);
 });
 
-test("POST /tasks retourne HTTP 201 si le titre et la description sont des chaînes", async () => {
+test("POST /tasks retourne HTTP 201 et enregistre la tâche", async () => {
   const response = await fetch(`${baseUrl}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -118,10 +132,23 @@ test("POST /tasks retourne HTTP 201 si le titre et la description sont des chaî
   const body = await response.json();
 
   assert.equal(response.status, 201);
-  assert.deepEqual(body, {
-    title: "Une tâche",
-    description: "Une description",
-  });
+  assert.equal(body.id, 1);
+  assert.equal(body.title, "Une tâche");
+  assert.equal(body.description, "Une description");
+  assert.equal(typeof body.createdAt, "string");
+  assert.ok(!Number.isNaN(Date.parse(body.createdAt)));
+});
+
+test("GET /tasks retourne les tâches enregistrées", async () => {
+  const response = await fetch(`${baseUrl}/tasks`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.length, 1);
+  assert.equal(body[0].id, 1);
+  assert.equal(body[0].title, "Une tâche");
+  assert.equal(body[0].description, "Une description");
+  assert.equal(typeof body[0].createdAt, "string");
 });
 
 test("Journalise GET /health avec le statut HTTP 200", async () => {
