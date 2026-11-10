@@ -109,6 +109,26 @@ test("POST /tasks retourne HTTP 400 si le titre n'est pas une chaîne", async ()
   assert.equal(response.status, 400);
 });
 
+test("POST /tasks retourne HTTP 400 si le titre est vide", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "", description: "Une description" }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("POST /tasks retourne HTTP 400 si le titre contient uniquement des espaces", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "   ", description: "Une description" }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
 test("POST /tasks retourne HTTP 400 si la description n'est pas une chaîne", async () => {
   const response = await fetch(`${baseUrl}/tasks`, {
     method: "POST",
@@ -119,7 +139,7 @@ test("POST /tasks retourne HTTP 400 si la description n'est pas une chaîne", as
   assert.equal(response.status, 400);
 });
 
-test("POST /tasks retourne HTTP 201 et enregistre la tâche", async () => {
+test("POST /tasks retourne HTTP 201 et enregistre une tâche sans date d'échéance", async () => {
   const response = await fetch(`${baseUrl}/tasks`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -135,20 +155,87 @@ test("POST /tasks retourne HTTP 201 et enregistre la tâche", async () => {
   assert.equal(body.id, 1);
   assert.equal(body.title, "Une tâche");
   assert.equal(body.description, "Une description");
+  assert.equal(body.dueDate, null);
   assert.equal(typeof body.createdAt, "string");
   assert.ok(!Number.isNaN(Date.parse(body.createdAt)));
 });
 
-test("GET /tasks retourne les tâches enregistrées", async () => {
+test("POST /tasks accepte une description absente", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Tâche sans description" }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.title, "Tâche sans description");
+  assert.equal(body.description, "");
+  assert.equal(body.dueDate, null);
+});
+
+test("POST /tasks accepte une date d'échéance valide", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Tâche avec échéance",
+      description: "Une description",
+      dueDate: "2026-12-08",
+    }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.dueDate, "2026-12-08");
+});
+
+test("POST /tasks retourne HTTP 400 si la date d'échéance est invalide", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Tâche avec date invalide",
+      description: "Une description",
+      dueDate: "2026-02-30",
+    }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("POST /tasks retourne HTTP 400 si la date ne respecte pas le format attendu", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Tâche avec mauvais format",
+      description: "Une description",
+      dueDate: "08/12/2026",
+    }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("GET /tasks retourne les tâches enregistrées avec leur date d'échéance", async () => {
   const response = await fetch(`${baseUrl}/tasks`);
   const body = await response.json();
 
   assert.equal(response.status, 200);
-  assert.equal(body.length, 1);
-  assert.equal(body[0].id, 1);
-  assert.equal(body[0].title, "Une tâche");
-  assert.equal(body[0].description, "Une description");
-  assert.equal(typeof body[0].createdAt, "string");
+  assert.equal(body.length, 3);
+
+  assert.equal(body[0].title, "Tâche avec échéance");
+  assert.equal(body[0].dueDate, "2026-12-08");
+
+  assert.equal(body[1].title, "Tâche sans description");
+  assert.equal(body[1].description, "");
+  assert.equal(body[1].dueDate, null);
+
+  assert.equal(body[2].title, "Une tâche");
+  assert.equal(body[2].dueDate, null);
 });
 
 test("Journalise GET /health avec le statut HTTP 200", async () => {

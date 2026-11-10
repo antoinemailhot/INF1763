@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { apiFetch } from './api'
 import './App.css'
 
@@ -10,6 +10,7 @@ interface Task {
   title: string
   description: string
   createdAt: string
+  dueDate: string | null
 }
 
 // Vérifie la structure des tâches reçues de l'API.
@@ -26,7 +27,8 @@ function isTask(value: unknown): value is Task {
     task.id > 0 &&
     typeof task.title === 'string' &&
     typeof task.description === 'string' &&
-    typeof task.createdAt === 'string'
+    typeof task.createdAt === 'string' &&
+    (typeof task.dueDate === 'string' || task.dueDate === null)
   )
 }
 
@@ -44,10 +46,31 @@ function formatTaskDate(value: string): string {
   }).format(date)
 }
 
+// Formate une date d'échéance sans conversion de fuseau horaire.
+function formatDueDate(value: string): string {
+  const parts = value.split('-')
+
+  if (parts.length !== 3) {
+    return value
+  }
+
+  const [year, month, day] = parts
+
+  return `${day}/${month}/${year}`
+}
+
 function App() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('loading')
   const [tasksStatus, setTasksStatus] = useState<TasksStatus>('loading')
   const [tasks, setTasks] = useState<Task[]>([])
+
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [dueDate, setDueDate] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [formSuccess, setFormSuccess] = useState('')
+  const [isTitleInvalid, setIsTitleInvalid] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -112,6 +135,86 @@ function App() {
     }
   }, [])
 
+  // Efface les anciens messages lorsqu'un champ est modifié.
+  function clearFormFeedback() {
+    setFormError('')
+    setFormSuccess('')
+    setIsTitleInvalid(false)
+  }
+
+  // Soumet le formulaire et ajoute la tâche retournée par l'API.
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    setFormError('')
+    setFormSuccess('')
+    setIsTitleInvalid(false)
+
+    const normalizedTitle = title.trim()
+
+    // Vérifie explicitement le titre avant d'appeler l'API.
+    if (!normalizedTitle) {
+      setIsTitleInvalid(true)
+      setFormError('Le titre est obligatoire.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    try {
+      const response = await apiFetch('/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: normalizedTitle,
+          description: description.trim(),
+          dueDate: dueDate || null,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorBody: unknown = await response.json().catch(() => null)
+
+        const message =
+          typeof errorBody === 'object' &&
+          errorBody !== null &&
+          'error' in errorBody &&
+          typeof errorBody.error === 'string'
+            ? errorBody.error
+            : `Impossible de créer la tâche (HTTP ${response.status}).`
+
+        throw new Error(message)
+      }
+
+      const createdTask: unknown = await response.json()
+
+      if (!isTask(createdTask)) {
+        throw new Error('La réponse du serveur contient une tâche invalide.')
+      }
+
+      // Ajoute immédiatement la tâche à la liste sans recharger la page.
+      setTasks((currentTasks) => [createdTask, ...currentTasks])
+      setTasksStatus('loaded')
+
+      // Réinitialise les champs après une création réussie.
+      setTitle('')
+      setDescription('')
+      setDueDate('')
+
+      setFormSuccess('La tâche a été créée avec succès.')
+    } catch (error) {
+      setFormError(
+        error instanceof Error
+          ? error.message
+          : 'Une erreur inattendue est survenue.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   const statusContent = {
     loading: {
       title: 'Vérification de l’API en cours',
@@ -175,6 +278,95 @@ function App() {
             </div>
           </div>
 
+          <section className="task-form-section" aria-labelledby="form-title">
+            <div className="tasks-heading">
+              <div>
+                <p className="eyebrow">NOUVELLE ACTIVITÉ</p>
+                <h2 id="form-title">Créer une tâche</h2>
+              </div>
+            </div>
+
+            <form className="task-form" onSubmit={handleSubmit}>
+              <div className="form-field">
+                <label htmlFor="task-title">
+                  Titre <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id="task-title"
+                  name="title"
+                  type="text"
+                  value={title}
+                  onChange={(event) => {
+                    clearFormFeedback()
+                    setTitle(event.target.value)
+                  }}
+                  placeholder="Ex. : Préparer le matériel"
+                  maxLength={200}
+                  required
+                  onInvalid={() => {
+                    setIsTitleInvalid(true)
+                    setFormError('Le titre est obligatoire.')
+                  }}
+                  disabled={isSubmitting}
+                  aria-invalid={isTitleInvalid}
+                  aria-describedby={isTitleInvalid ? 'form-error' : undefined}
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="task-description">Description</label>
+                <textarea
+                  id="task-description"
+                  name="description"
+                  value={description}
+                  onChange={(event) => {
+                    clearFormFeedback()
+                    setDescription(event.target.value)
+                  }}
+                  placeholder="Ajoutez des précisions sur cette tâche..."
+                  rows={4}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <div className="form-field">
+                <label htmlFor="task-due-date">Date d'échéance</label>
+                <input
+                  id="task-due-date"
+                  name="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => {
+                    clearFormFeedback()
+                    setDueDate(event.target.value)
+                  }}
+                  disabled={isSubmitting}
+                />
+                <p className="field-hint">Facultative</p>
+              </div>
+
+              {formError && (
+                <p className="form-feedback form-feedback--error" id="form-error" role="alert">
+                  {formError}
+                </p>
+              )}
+
+              {formSuccess && (
+                <p className="form-feedback form-feedback--success" role="status">
+                  {formSuccess}
+                </p>
+              )}
+
+              <button
+                className="submit-button"
+                type="submit"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? 'Création en cours...' : 'Créer la tâche'}
+              </button>
+            </form>
+          </section>
+
           <section className="tasks-section" aria-labelledby="tasks-title">
             <div className="tasks-heading">
               <div>
@@ -223,7 +415,14 @@ function App() {
                   <li className="task-card" key={task.id}>
                     <div className="task-card-content">
                       <h3>{task.title}</h3>
-                      <p>{task.description}</p>
+                      <p>{task.description || 'Aucune description.'}</p>
+
+                      {task.dueDate && (
+                        <p className="task-due-date">
+                          Échéance : {formatDueDate(task.dueDate)}
+                        </p>
+                      )}
+
                       <time dateTime={task.createdAt}>
                         Créée le {formatTaskDate(task.createdAt)}
                       </time>

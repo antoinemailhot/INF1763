@@ -3,6 +3,20 @@ import type Database from "better-sqlite3";
 import { createDatabase } from "./database";
 import { TaskRepository } from "./taskRepository";
 
+// Vérifie qu'une date respecte le format YYYY-MM-DD et existe réellement.
+function isValidDateOnly(value: string): boolean {
+  // Vérifie d'abord la structure de la date.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  // Vérifie ensuite la validité réelle de la date dans le calendrier.
+  const date = new Date(`${value}T00:00:00.000Z`);
+
+  return !Number.isNaN(date.getTime())
+    && date.toISOString().slice(0, 10) === value;
+}
+
 // Crée une application Express avec une connexion SQLite injectée.
 export function createApp(database: Database.Database) {
   const app = express();
@@ -44,6 +58,7 @@ export function createApp(database: Database.Database) {
   app.post("/tasks", (req, res) => {
     const body: unknown = req.body;
 
+    // Vérifie que le corps de la requête est un objet JSON.
     if (typeof body !== "object" || body === null || Array.isArray(body)) {
       return res.status(400).json({
         error: "Le corps de la requête doit être un objet JSON.",
@@ -52,21 +67,55 @@ export function createApp(database: Database.Database) {
 
     const task = body as Record<string, unknown>;
 
+    // Vérifie que le titre est une chaîne de caractères.
     if (typeof task.title !== "string") {
       return res.status(400).json({
         error: "Le titre est obligatoire et doit être une chaîne de caractères.",
       });
     }
 
-    if (typeof task.description !== "string") {
+    // Refuse les titres vides ou composés uniquement d'espaces.
+    const title = task.title.trim();
+
+    if (title.length === 0) {
+      return res.status(400).json({
+        error: "Le titre ne peut pas être vide.",
+      });
+    }
+
+    // La description est facultative, mais doit être une chaîne si fournie.
+    if (
+      task.description !== undefined
+      && typeof task.description !== "string"
+    ) {
       return res.status(400).json({
         error: "La description doit être une chaîne de caractères.",
       });
     }
 
+    const description = typeof task.description === "string"
+      ? task.description
+      : "";
+
+    // La date d'échéance est facultative.
+    // Une valeur absente ou null est enregistrée comme NULL dans SQLite.
+    let dueDate: string | null = null;
+
+    if (task.dueDate !== undefined && task.dueDate !== null) {
+      if (typeof task.dueDate !== "string" || !isValidDateOnly(task.dueDate)) {
+        return res.status(400).json({
+          error: "La date d'échéance doit être une date valide au format YYYY-MM-DD.",
+        });
+      }
+
+      dueDate = task.dueDate;
+    }
+
+    // Enregistre la tâche et retourne les données créées.
     const createdTask = taskRepository.createTask(
-      task.title,
-      task.description,
+      title,
+      description,
+      dueDate,
     );
 
     return res.status(201).json(createdTask);

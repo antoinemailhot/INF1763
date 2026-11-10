@@ -25,7 +25,7 @@ export function createDatabase(
   // Active le mode WAL pour améliorer la gestion des accès concurrents.
   database.pragma("journal_mode = WAL");
 
-  // Initialise la structure de la base de données.
+  // Initialise la table des tâches, y compris la date d'échéance.
   database.exec(`
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,9 +33,24 @@ export function createDatabase(
       description TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (
         strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-      )
+      ),
+      due_date TEXT
     );
   `);
+
+  // Vérifie les colonnes existantes pour assurer la compatibilité
+  // avec les bases de données créées avant l'ajout de due_date.
+  const columns = database.pragma("table_info(tasks)") as Array<{
+    name: string;
+  }>;
+
+  // Ajoute la colonne uniquement si elle n'existe pas déjà.
+  if (!columns.some((column) => column.name === "due_date")) {
+    database.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN due_date TEXT;
+    `);
+  }
 
   return database;
 }
