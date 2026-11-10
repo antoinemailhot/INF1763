@@ -44,6 +44,19 @@ export class TaskRepository {
     return task;
   }
 
+  // Supprime définitivement une tâche à partir de son identifiant.
+  // Retourne true si une tâche a été supprimée, sinon false.
+  deleteTask(id: number): boolean {
+    const statement = this.database.prepare(`
+      DELETE FROM tasks
+      WHERE id = ?
+    `);
+
+    const result = statement.run(id);
+
+    return result.changes > 0;
+  }
+
   // Récupère toutes les tâches, des plus récentes aux plus anciennes.
   getAllTasks(): Task[] {
     return this.database.prepare(`
