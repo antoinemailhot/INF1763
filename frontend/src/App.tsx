@@ -59,6 +59,25 @@ function formatDueDate(value: string): string {
   return `${day}/${month}/${year}`
 }
 
+// Extrait un message d'erreur provenant éventuellement de l'API.
+async function getErrorMessage(
+  response: Response,
+  fallbackMessage: string,
+): Promise<string> {
+  const errorBody: unknown = await response.json().catch(() => null)
+
+  if (
+    typeof errorBody === 'object' &&
+    errorBody !== null &&
+    'error' in errorBody &&
+    typeof errorBody.error === 'string'
+  ) {
+    return errorBody.error
+  }
+
+  return `${fallbackMessage} (HTTP ${response.status}).`
+}
+
 function App() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('loading')
   const [tasksStatus, setTasksStatus] = useState<TasksStatus>('loading')
@@ -71,6 +90,12 @@ function App() {
   const [formError, setFormError] = useState('')
   const [formSuccess, setFormSuccess] = useState('')
   const [isTitleInvalid, setIsTitleInvalid] = useState(false)
+
+  // Identifiant de la tâche en cours de suppression.
+  const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null)
+
+  // Message d'erreur indépendant de celui du formulaire de création.
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     let active = true
@@ -175,17 +200,12 @@ function App() {
       })
 
       if (!response.ok) {
-        const errorBody: unknown = await response.json().catch(() => null)
-
-        const message =
-          typeof errorBody === 'object' &&
-          errorBody !== null &&
-          'error' in errorBody &&
-          typeof errorBody.error === 'string'
-            ? errorBody.error
-            : `Impossible de créer la tâche (HTTP ${response.status}).`
-
-        throw new Error(message)
+        throw new Error(
+          await getErrorMessage(
+            response,
+            'Impossible de créer la tâche',
+          ),
+        )
       }
 
       const createdTask: unknown = await response.json()
@@ -212,6 +232,61 @@ function App() {
       )
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  // Demande confirmation, puis supprime la tâche après validation du serveur.
+  async function handleDelete(task: Task) {
+    // Empêche une autre suppression pendant une requête en cours.
+    if (deletingTaskId !== null || isSubmitting) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Voulez-vous vraiment supprimer définitivement la tâche « ${task.title} » ? Cette action est irréversible.`,
+    )
+
+    // Une annulation ne déclenche aucune requête API.
+    if (!confirmed) {
+      return
+    }
+
+    setDeleteError('')
+    setDeletingTaskId(task.id)
+
+    try {
+      const response = await apiFetch(`/tasks/${task.id}`, {
+        method: 'DELETE',
+      })
+
+      // L'API doit confirmer la suppression avec HTTP 204.
+      if (response.status !== 204) {
+        throw new Error(
+          await getErrorMessage(
+            response,
+            'Impossible de supprimer la tâche',
+          ),
+        )
+      }
+
+      // Retire la tâche uniquement après confirmation du serveur.
+      setTasks((currentTasks) =>
+        currentTasks.filter((currentTask) => currentTask.id !== task.id),
+      )
+
+      // Met à jour l'état de la liste si la tâche supprimée était la dernière.
+      if (tasks.length === 1) {
+        setTasksStatus('empty')
+      }
+    } catch (error) {
+      // En cas d'erreur, la tâche demeure dans la liste.
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : 'Une erreur inattendue est survenue pendant la suppression.',
+      )
+    } finally {
+      setDeletingTaskId(null)
     }
   }
 
@@ -307,7 +382,7 @@ function App() {
                     setIsTitleInvalid(true)
                     setFormError('Le titre est obligatoire.')
                   }}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || deletingTaskId !== null}
                   aria-invalid={isTitleInvalid}
                   aria-describedby={isTitleInvalid ? 'form-error' : undefined}
                 />
@@ -325,7 +400,7 @@ function App() {
                   }}
                   placeholder="Ajoutez des précisions sur cette tâche..."
                   rows={4}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || deletingTaskId !== null}
                 />
               </div>
 
@@ -340,7 +415,7 @@ function App() {
                     clearFormFeedback()
                     setDueDate(event.target.value)
                   }}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || deletingTaskId !== null}
                 />
                 <p className="field-hint">Facultative</p>
               </div>
@@ -360,7 +435,7 @@ function App() {
               <button
                 className="submit-button"
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || deletingTaskId !== null}
               >
                 {isSubmitting ? 'Création en cours...' : 'Créer la tâche'}
               </button>
@@ -380,6 +455,12 @@ function App() {
                 </span>
               )}
             </div>
+
+            {deleteError && (
+              <p className="form-feedback form-feedback--error delete-feedback" role="alert">
+                {deleteError}
+              </p>
+            )}
 
             {tasksStatus === 'loading' && (
               <div className="tasks-message" role="status" aria-live="polite">
@@ -411,24 +492,40 @@ function App() {
 
             {tasksStatus === 'loaded' && (
               <ul className="tasks-list">
-                {tasks.map((task) => (
-                  <li className="task-card" key={task.id}>
-                    <div className="task-card-content">
-                      <h3>{task.title}</h3>
-                      <p>{task.description || 'Aucune description.'}</p>
+                {tasks.map((task) => {
+                  const isDeleting = deletingTaskId === task.id
 
-                      {task.dueDate && (
-                        <p className="task-due-date">
-                          Échéance : {formatDueDate(task.dueDate)}
-                        </p>
-                      )}
+                  return (
+                    <li className="task-card" key={task.id}>
+                      <div className="task-card-content">
+                        <h3>{task.title}</h3>
+                        <p>{task.description || 'Aucune description.'}</p>
 
-                      <time dateTime={task.createdAt}>
-                        Créée le {formatTaskDate(task.createdAt)}
-                      </time>
-                    </div>
-                  </li>
-                ))}
+                        {task.dueDate && (
+                          <p className="task-due-date">
+                            Échéance : {formatDueDate(task.dueDate)}
+                          </p>
+                        )}
+
+                        <time dateTime={task.createdAt}>
+                          Créée le {formatTaskDate(task.createdAt)}
+                        </time>
+                      </div>
+
+                      <div className="task-card-actions">
+                        <button
+                          className="delete-button"
+                          type="button"
+                          onClick={() => void handleDelete(task)}
+                          disabled={deletingTaskId !== null || isSubmitting}
+                          aria-label={`Supprimer la tâche : ${task.title}`}
+                        >
+                          {isDeleting ? 'Suppression...' : 'Supprimer'}
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </section>

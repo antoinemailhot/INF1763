@@ -516,3 +516,50 @@ main {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Actions disponibles sur chaque carte de tâche. */
+.task-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+/* Bouton de suppression définitive. */
+.delete-button {
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  color: #b91c1c;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.delete-button:hover:not(:disabled) {
+  border-color: #dc2626;
+  color: #fff;
+  background: #dc2626;
+}
+
+.delete-button:focus-visible {
+  outline: 3px solid rgba(220, 38, 38, 0.25);
+  outline-offset: 3px;
+}
+
+.delete-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Message d'erreur propre à la suppression. */
+.delete-feedback {
+  margin-bottom: 18px;
+}

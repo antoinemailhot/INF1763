@@ -54,6 +54,40 @@ export function createApp(database: Database.Database) {
     return res.status(200).json(tasks);
   });
 
+  // Supprime définitivement une tâche à partir de son identifiant.
+  app.delete("/tasks/:id", (req, res) => {
+    const rawId = req.params.id;
+
+    // Accepte uniquement une chaîne composée de chiffres.
+    if (!/^[1-9]\d*$/.test(rawId)) {
+      return res.status(400).json({
+        error: "L'identifiant de la tâche doit être un entier positif.",
+      });
+    }
+
+    const id = Number(rawId);
+
+    // Vérifie que l'identifiant peut être représenté sans perte de précision.
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({
+        error: "L'identifiant de la tâche est invalide.",
+      });
+    }
+
+    // Effectue la suppression dans SQLite.
+    const deleted = taskRepository.deleteTask(id);
+
+    // Retourne 404 si aucune tâche ne correspond à cet identifiant.
+    if (!deleted) {
+      return res.status(404).json({
+        error: "La tâche demandée est introuvable.",
+      });
+    }
+
+    // Confirme la suppression sans retourner de corps de réponse.
+    return res.status(204).send();
+  });
+
   // Valide et enregistre une nouvelle tâche dans SQLite.
   app.post("/tasks", (req, res) => {
     const body: unknown = req.body;

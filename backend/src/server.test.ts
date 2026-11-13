@@ -29,6 +29,23 @@ async function captureLogs<T>(
   }
 }
 
+// Crée une tâche dédiée à un test et retourne son identifiant.
+async function createTestTask(title: string): Promise<number> {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+
+  assert.equal(response.status, 201);
+
+  const body = await response.json();
+
+  assert.equal(typeof body.id, "number");
+
+  return body.id;
+}
+
 before(async () => {
   server = app.listen(0);
 
@@ -267,4 +284,97 @@ test("Journalise POST /tasks avec le statut HTTP 400", async () => {
 
   assert.equal(response.status, 400);
   assert.ok(logs.includes("POST /tasks - 400"));
+});
+
+// Tests de suppression définitive des tâches (US8).
+
+test("DELETE /tasks/:id retourne HTTP 204 et supprime la tâche", async () => {
+  const taskId = await createTestTask("Tâche à supprimer");
+
+  const response = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+
+  assert.equal(response.status, 204);
+  assert.equal(await response.text(), "");
+});
+
+test("DELETE /tasks/:id retire la tâche de GET /tasks sans affecter les autres", async () => {
+  const taskId = await createTestTask("Tâche à retirer de la liste");
+  const otherTaskId = await createTestTask("Tâche à conserver");
+
+  const deleteResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+
+  assert.equal(deleteResponse.status, 204);
+
+  const listResponse = await fetch(`${baseUrl}/tasks`);
+  const tasks = await listResponse.json();
+
+  assert.equal(listResponse.status, 200);
+  assert.ok(!tasks.some((task: { id: number }) => task.id === taskId));
+  assert.ok(tasks.some((task: { id: number }) => task.id === otherTaskId));
+});
+
+test("DELETE /tasks/:id retourne HTTP 404 si la tâche n'existe pas", async () => {
+  const response = await fetch(`${baseUrl}/tasks/999999`, {
+    method: "DELETE",
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(body.error, "La tâche demandée est introuvable.");
+});
+
+test("DELETE /tasks/:id retourne HTTP 400 si l'identifiant est invalide", async () => {
+  const invalidIds = [
+    "abc",
+    "0",
+    "-1",
+    "1.5",
+    "1abc",
+    "999999999999999999999999999999",
+  ];
+
+  for (const invalidId of invalidIds) {
+    const response = await fetch(`${baseUrl}/tasks/${invalidId}`, {
+      method: "DELETE",
+    });
+
+    assert.equal(
+      response.status,
+      400,
+      `L'identifiant ${invalidId} devrait être refusé.`,
+    );
+  }
+});
+
+test("DELETE /tasks/:id retourne HTTP 404 lors d'une deuxième suppression", async () => {
+  const taskId = await createTestTask("Tâche supprimée deux fois");
+
+  const firstResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+
+  const secondResponse = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+
+  assert.equal(firstResponse.status, 204);
+  assert.equal(secondResponse.status, 404);
+});
+
+test("Journalise DELETE /tasks/:id avec le statut HTTP 204", async () => {
+  const taskId = await createTestTask("Tâche pour journalisation");
+
+  const { result: response, logs } = await captureLogs(() =>
+    fetch(`${baseUrl}/tasks/${taskId}`, {
+      method: "DELETE",
+    }),
+  );
+
+  assert.equal(response.status, 204);
+  assert.ok(logs.includes(`DELETE /tasks/${taskId} - 204`));
 });
