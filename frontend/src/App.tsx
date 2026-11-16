@@ -11,6 +11,7 @@ interface Task {
   description: string
   createdAt: string
   dueDate: string | null
+  completed: boolean
 }
 
 // Vérifie la structure des tâches reçues de l'API.
@@ -28,7 +29,8 @@ function isTask(value: unknown): value is Task {
     typeof task.title === 'string' &&
     typeof task.description === 'string' &&
     typeof task.createdAt === 'string' &&
-    (typeof task.dueDate === 'string' || task.dueDate === null)
+    (typeof task.dueDate === 'string' || task.dueDate === null) &&
+    typeof task.completed === 'boolean'
   )
 }
 
@@ -93,6 +95,10 @@ function App() {
 
   // Identifiant de la tâche en cours de suppression.
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null)
+
+  // Identifiant de la tâche dont l'état complété est en cours d'enregistrement.
+  const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null)
+  const [toggleError, setToggleError] = useState('')
 
   // Message d'erreur indépendant de celui du formulaire de création.
   const [deleteError, setDeleteError] = useState('')
@@ -290,6 +296,53 @@ function App() {
     }
   }
 
+  // Inverse l'état complété d'une tâche après validation du serveur (US11).
+  async function handleToggleCompleted(task: Task) {
+    setToggleError('')
+    setTogglingTaskId(task.id)
+
+    try {
+      const response = await apiFetch(`/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ completed: !task.completed }),
+      })
+
+      if (!response.ok) {
+        throw new Error(
+          await getErrorMessage(
+            response,
+            'Impossible de mettre à jour la tâche',
+          ),
+        )
+      }
+
+      const updatedTask: unknown = await response.json()
+
+      if (!isTask(updatedTask)) {
+        throw new Error('La réponse du serveur contient une tâche invalide.')
+      }
+
+      // Remplace la tâche par la version enregistrée par l'API.
+      setTasks((currentTasks) =>
+        currentTasks.map((currentTask) =>
+          currentTask.id === updatedTask.id ? updatedTask : currentTask,
+        ),
+      )
+    } catch (error) {
+      // En cas d'erreur, la case conserve son état précédent.
+      setToggleError(
+        error instanceof Error
+          ? error.message
+          : 'Une erreur inattendue est survenue pendant la mise à jour.',
+      )
+    } finally {
+      setTogglingTaskId(null)
+    }
+  }
+
   const statusContent = {
     loading: {
       title: 'Vérification de l’API en cours',
@@ -462,6 +515,12 @@ function App() {
               </p>
             )}
 
+            {toggleError && (
+              <p className="form-feedback form-feedback--error delete-feedback" role="alert">
+                {toggleError}
+              </p>
+            )}
+
             {tasksStatus === 'loading' && (
               <div className="tasks-message" role="status" aria-live="polite">
                 <span className="loading-spinner" aria-hidden="true" />
@@ -494,10 +553,29 @@ function App() {
               <ul className="tasks-list">
                 {tasks.map((task) => {
                   const isDeleting = deletingTaskId === task.id
+                  const isToggling = togglingTaskId === task.id
 
                   return (
-                    <li className="task-card" key={task.id}>
+                    <li
+                      className={
+                        task.completed
+                          ? 'task-card task-card--completed'
+                          : 'task-card'
+                      }
+                      key={task.id}
+                    >
                       <div className="task-card-content">
+                        <label className="task-completed-toggle">
+                          <input
+                            type="checkbox"
+                            checked={task.completed}
+                            onChange={() => void handleToggleCompleted(task)}
+                            disabled={isToggling || isDeleting}
+                            aria-label={`Marquer comme complétée : ${task.title}`}
+                          />
+                          <span>{task.completed ? 'Complétée' : 'À faire'}</span>
+                        </label>
+
                         <h3>{task.title}</h3>
                         <p>{task.description || 'Aucune description.'}</p>
 
