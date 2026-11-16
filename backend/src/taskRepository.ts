@@ -7,6 +7,25 @@ export interface Task {
   description: string;
   createdAt: string;
   dueDate: string | null;
+  completed: boolean;
+}
+
+// Structure d'une ligne lue dans SQLite, où les booléens sont des entiers.
+type TaskRow = Omit<Task, "completed"> & { completed: number };
+
+// Colonnes sélectionnées pour construire une tâche.
+const TASK_COLUMNS = `
+  id,
+  title,
+  description,
+  created_at AS createdAt,
+  due_date AS dueDate,
+  completed
+`;
+
+// Convertit une ligne SQLite en tâche.
+function toTask(row: TaskRow): Task {
+  return { ...row, completed: row.completed === 1 };
 }
 
 // Dépôt responsable des opérations de persistance des tâches.
@@ -26,22 +45,40 @@ export class TaskRepository {
 
     const result = statement.run(title, description, dueDate);
 
-    const task = this.database.prepare(`
-      SELECT
-        id,
-        title,
-        description,
-        created_at AS createdAt,
-        due_date AS dueDate
-      FROM tasks
-      WHERE id = ?
-    `).get(result.lastInsertRowid) as Task | undefined;
+    const task = this.getTaskById(Number(result.lastInsertRowid));
 
     if (!task) {
       throw new Error("Impossible de récupérer la tâche créée.");
     }
 
     return task;
+  }
+
+  // Récupère une tâche à partir de son identifiant.
+  getTaskById(id: number): Task | undefined {
+    const row = this.database.prepare(`
+      SELECT ${TASK_COLUMNS}
+      FROM tasks
+      WHERE id = ?
+    `).get(id) as TaskRow | undefined;
+
+    return row ? toTask(row) : undefined;
+  }
+
+  // Modifie l'état complété d'une tâche.
+  // Retourne la tâche mise à jour, ou undefined si elle n'existe pas.
+  setTaskCompleted(id: number, completed: boolean): Task | undefined {
+    const result = this.database.prepare(`
+      UPDATE tasks
+      SET completed = ?
+      WHERE id = ?
+    `).run(completed ? 1 : 0, id);
+
+    if (result.changes === 0) {
+      return undefined;
+    }
+
+    return this.getTaskById(id);
   }
 
   // Supprime définitivement une tâche à partir de son identifiant.
@@ -59,15 +96,12 @@ export class TaskRepository {
 
   // Récupère toutes les tâches, des plus récentes aux plus anciennes.
   getAllTasks(): Task[] {
-    return this.database.prepare(`
-      SELECT
-        id,
-        title,
-        description,
-        created_at AS createdAt,
-        due_date AS dueDate
+    const rows = this.database.prepare(`
+      SELECT ${TASK_COLUMNS}
       FROM tasks
       ORDER BY created_at DESC, id DESC
-    `).all() as Task[];
+    `).all() as TaskRow[];
+
+    return rows.map(toTask);
   }
 }

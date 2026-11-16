@@ -52,5 +52,13 @@ export function createDatabase(
     `);
   }
 
+  // Ajoute l'état complété pour les bases créées avant US11.
+  if (!columns.some((column) => column.name === "completed")) {
+    database.exec(`
+      ALTER TABLE tasks
+      ADD COLUMN completed INTEGER NOT NULL DEFAULT 0;
+    `);
+  }
+
   return database;
 }

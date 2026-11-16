@@ -17,6 +17,24 @@ function isValidDateOnly(value: string): boolean {
     && date.toISOString().slice(0, 10) === value;
 }
 
+// Valide l'identifiant d'une tâche reçu dans l'URL.
+// Retourne l'identifiant numérique, ou le message d'erreur à renvoyer.
+function parseTaskId(rawId: string): { id: number } | { error: string } {
+  // Accepte uniquement une chaîne composée de chiffres.
+  if (!/^[1-9]\d*$/.test(rawId)) {
+    return { error: "L'identifiant de la tâche doit être un entier positif." };
+  }
+
+  const id = Number(rawId);
+
+  // Vérifie que l'identifiant peut être représenté sans perte de précision.
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    return { error: "L'identifiant de la tâche est invalide." };
+  }
+
+  return { id };
+}
+
 // Crée une application Express avec une connexion SQLite injectée.
 export function createApp(database: Database.Database) {
   const app = express();
@@ -56,26 +74,14 @@ export function createApp(database: Database.Database) {
 
   // Supprime définitivement une tâche à partir de son identifiant.
   app.delete("/tasks/:id", (req, res) => {
-    const rawId = req.params.id;
+    const parsedId = parseTaskId(req.params.id);
 
-    // Accepte uniquement une chaîne composée de chiffres.
-    if (!/^[1-9]\d*$/.test(rawId)) {
-      return res.status(400).json({
-        error: "L'identifiant de la tâche doit être un entier positif.",
-      });
-    }
-
-    const id = Number(rawId);
-
-    // Vérifie que l'identifiant peut être représenté sans perte de précision.
-    if (!Number.isSafeInteger(id) || id <= 0) {
-      return res.status(400).json({
-        error: "L'identifiant de la tâche est invalide.",
-      });
+    if ("error" in parsedId) {
+      return res.status(400).json({ error: parsedId.error });
     }
 
     // Effectue la suppression dans SQLite.
-    const deleted = taskRepository.deleteTask(id);
+    const deleted = taskRepository.deleteTask(parsedId.id);
 
     // Retourne 404 si aucune tâche ne correspond à cet identifiant.
     if (!deleted) {
@@ -86,6 +92,42 @@ export function createApp(database: Database.Database) {
 
     // Confirme la suppression sans retourner de corps de réponse.
     return res.status(204).send();
+  });
+
+  // Marque une tâche comme complétée ou non complétée (US11).
+  app.patch("/tasks/:id", (req, res) => {
+    const parsedId = parseTaskId(req.params.id);
+
+    if ("error" in parsedId) {
+      return res.status(400).json({ error: parsedId.error });
+    }
+
+    const body: unknown = req.body;
+
+    // Exige un objet JSON contenant un booléen « completed ».
+    if (
+      typeof body !== "object"
+      || body === null
+      || Array.isArray(body)
+      || typeof (body as Record<string, unknown>).completed !== "boolean"
+    ) {
+      return res.status(400).json({
+        error: "Le champ completed est obligatoire et doit être un booléen.",
+      });
+    }
+
+    const completed = (body as { completed: boolean }).completed;
+
+    // Enregistre le nouvel état dans SQLite.
+    const updatedTask = taskRepository.setTaskCompleted(parsedId.id, completed);
+
+    if (!updatedTask) {
+      return res.status(404).json({
+        error: "La tâche demandée est introuvable.",
+      });
+    }
+
+    return res.status(200).json(updatedTask);
   });
 
   // Valide et enregistre une nouvelle tâche dans SQLite.

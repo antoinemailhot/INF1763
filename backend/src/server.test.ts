@@ -378,3 +378,102 @@ test("Journalise DELETE /tasks/:id avec le statut HTTP 204", async () => {
   assert.equal(response.status, 204);
   assert.ok(logs.includes(`DELETE /tasks/${taskId} - 204`));
 });
+
+test("POST /tasks crée une tâche non complétée par défaut", async () => {
+  const response = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title: "Tâche non complétée" }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 201);
+  assert.equal(body.completed, false);
+});
+
+test("PATCH /tasks/:id marque une tâche comme complétée et la sauvegarde", async () => {
+  const taskId = await createTestTask("Tâche à compléter");
+
+  const response = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ completed: true }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.id, taskId);
+  assert.equal(body.completed, true);
+
+  // L'état doit être conservé lors d'un nouveau chargement de la liste.
+  const listResponse = await fetch(`${baseUrl}/tasks`);
+  const tasks = await listResponse.json();
+  const savedTask = tasks.find((task: { id: number }) => task.id === taskId);
+
+  assert.equal(savedTask.completed, true);
+});
+
+test("PATCH /tasks/:id permet de remettre une tâche à non complétée", async () => {
+  const taskId = await createTestTask("Tâche à décocher");
+
+  await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ completed: true }),
+  });
+
+  const response = await fetch(`${baseUrl}/tasks/${taskId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ completed: false }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.completed, false);
+});
+
+test("PATCH /tasks/:id retourne HTTP 400 si completed n'est pas un booléen", async () => {
+  const taskId = await createTestTask("Tâche avec corps invalide");
+  const invalidBodies = [{}, { completed: "true" }, { completed: 1 }, null, []];
+
+  for (const invalidBody of invalidBodies) {
+    const response = await fetch(`${baseUrl}/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(invalidBody),
+    });
+
+    assert.equal(
+      response.status,
+      400,
+      `Le corps ${JSON.stringify(invalidBody)} devrait être refusé.`,
+    );
+  }
+});
+
+test("PATCH /tasks/:id retourne HTTP 400 si l'identifiant est invalide", async () => {
+  const response = await fetch(`${baseUrl}/tasks/abc`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ completed: true }),
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test("PATCH /tasks/:id retourne HTTP 404 si la tâche n'existe pas", async () => {
+  const response = await fetch(`${baseUrl}/tasks/999999`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ completed: true }),
+  });
+
+  const body = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(body.error, "La tâche demandée est introuvable.");
+});
