@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiFetch } from './api'
 import './App.css'
 
@@ -96,6 +96,18 @@ function App() {
 
   // Message d'erreur indépendant de celui du formulaire de création.
   const [deleteError, setDeleteError] = useState('')
+
+  // Référence au champ titre pour y replacer le curseur après une création.
+  const titleInputRef = useRef<HTMLInputElement>(null)
+  const shouldFocusTitleRef = useRef(false)
+
+  // Replace le curseur dans le titre une fois le champ réactivé (US10).
+  useEffect(() => {
+    if (!isSubmitting && shouldFocusTitleRef.current) {
+      shouldFocusTitleRef.current = false
+      titleInputRef.current?.focus()
+    }
+  }, [isSubmitting])
 
   useEffect(() => {
     let active = true
@@ -222,6 +234,7 @@ function App() {
       setTitle('')
       setDescription('')
       setDueDate('')
+      shouldFocusTitleRef.current = true
 
       setFormSuccess('La tâche a été créée avec succès.')
     } catch (error) {
@@ -367,6 +380,7 @@ function App() {
                   Titre <span aria-hidden="true">*</span>
                 </label>
                 <input
+                  ref={titleInputRef}
                   id="task-title"
                   name="title"
                   type="text"
