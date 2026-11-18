@@ -1,4 +1,6 @@
-import type Database from "better-sqlite3";
+import type { Database } from "@tursodatabase/database" with {
+  "resolution-mode": "import"
+};
 
 // Structure d'une tâche retournée par le dépôt.
 export interface Task {
@@ -10,8 +12,15 @@ export interface Task {
   completed: boolean;
 }
 
-// Structure d'une ligne lue dans SQLite, où les booléens sont des entiers.
-type TaskRow = Omit<Task, "completed"> & { completed: number };
+// Structure d'une ligne récupérée dans SQLite.
+type TaskRow = {
+  id: number;
+  title: string;
+  description: string;
+  createdAt: string;
+  dueDate: string | null;
+  completed: number;
+};
 
 // Colonnes sélectionnées pour construire une tâche.
 const TASK_COLUMNS = `
@@ -25,27 +34,38 @@ const TASK_COLUMNS = `
 
 // Convertit une ligne SQLite en tâche.
 function toTask(row: TaskRow): Task {
-  return { ...row, completed: row.completed === 1 };
+  return {
+    ...row,
+    completed: Number(row.completed) === 1,
+  };
 }
 
-// Dépôt responsable des opérations de persistance des tâches.
+// Dépôt responsable des opérations asynchrones de persistance.
 export class TaskRepository {
-  constructor(private readonly database: Database.Database) {}
+  constructor(private readonly database: Database) {}
 
   // Enregistre une tâche et retourne la tâche créée.
-  createTask(
+  async createTask(
     title: string,
     description: string,
     dueDate: string | null = null,
-  ): Task {
-    const statement = this.database.prepare(`
-      INSERT INTO tasks (title, description, due_date)
-      VALUES (?, ?, ?)
-    `);
+  ): Promise<Task> {
 
-    const result = statement.run(title, description, dueDate);
+    // Insère la tâche dans la base de données.
+    const result = await this.database.run(
+      `
+        INSERT INTO tasks (title, description, due_date)
+        VALUES (?, ?, ?)
+      `,
+      title,
+      description,
+      dueDate,
+    );
 
-    const task = this.getTaskById(Number(result.lastInsertRowid));
+    // Récupère la tâche créée à partir de son identifiant.
+    const task = await this.getTaskById(
+      Number(result.lastInsertRowid),
+    );
 
     if (!task) {
       throw new Error("Impossible de récupérer la tâche créée.");
@@ -55,24 +75,38 @@ export class TaskRepository {
   }
 
   // Récupère une tâche à partir de son identifiant.
-  getTaskById(id: number): Task | undefined {
-    const row = this.database.prepare(`
-      SELECT ${TASK_COLUMNS}
-      FROM tasks
-      WHERE id = ?
-    `).get(id) as TaskRow | undefined;
+  async getTaskById(
+    id: number,
+  ): Promise<Task | undefined> {
+
+    const row = await this.database.get(
+      `
+        SELECT ${TASK_COLUMNS}
+        FROM tasks
+        WHERE id = ?
+      `,
+      id,
+    ) as TaskRow | undefined;
 
     return row ? toTask(row) : undefined;
   }
 
   // Modifie l'état complété d'une tâche.
-  // Retourne la tâche mise à jour, ou undefined si elle n'existe pas.
-  setTaskCompleted(id: number, completed: boolean): Task | undefined {
-    const result = this.database.prepare(`
-      UPDATE tasks
-      SET completed = ?
-      WHERE id = ?
-    `).run(completed ? 1 : 0, id);
+  // Retourne la tâche mise à jour ou undefined si elle n'existe pas.
+  async setTaskCompleted(
+    id: number,
+    completed: boolean,
+  ): Promise<Task | undefined> {
+
+    const result = await this.database.run(
+      `
+        UPDATE tasks
+        SET completed = ?
+        WHERE id = ?
+      `,
+      completed ? 1 : 0,
+      id,
+    );
 
     if (result.changes === 0) {
       return undefined;
@@ -81,26 +115,30 @@ export class TaskRepository {
     return this.getTaskById(id);
   }
 
-  // Supprime définitivement une tâche à partir de son identifiant.
-  // Retourne true si une tâche a été supprimée, sinon false.
-  deleteTask(id: number): boolean {
-    const statement = this.database.prepare(`
-      DELETE FROM tasks
-      WHERE id = ?
-    `);
+  // Supprime définitivement une tâche.
+  async deleteTask(id: number): Promise<boolean> {
 
-    const result = statement.run(id);
+    const result = await this.database.run(
+      `
+        DELETE FROM tasks
+        WHERE id = ?
+      `,
+      id,
+    );
 
     return result.changes > 0;
   }
 
   // Récupère toutes les tâches, des plus récentes aux plus anciennes.
-  getAllTasks(): Task[] {
-    const rows = this.database.prepare(`
-      SELECT ${TASK_COLUMNS}
-      FROM tasks
-      ORDER BY created_at DESC, id DESC
-    `).all() as TaskRow[];
+  async getAllTasks(): Promise<Task[]> {
+
+    const rows = await this.database.all(
+      `
+        SELECT ${TASK_COLUMNS}
+        FROM tasks
+        ORDER BY created_at DESC, id DESC
+      `,
+    ) as TaskRow[];
 
     return rows.map(toTask);
   }

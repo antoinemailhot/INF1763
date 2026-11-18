@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { after, before, test } from "node:test";
 import type { Server } from "node:http";
 import { createDatabase } from "./database.js";
 import { createApp } from "./server.js";
+import { TaskRepository } from "./taskRepository.js";
 
-const database = createDatabase(":memory:");
-const app = createApp(database);
+// La connexion et l'application sont initialisées dans before().
+let database: Awaited<ReturnType<typeof createDatabase>>;
+let app: ReturnType<typeof createApp>;
 
 let server: Server;
 let baseUrl: string;
@@ -47,6 +52,10 @@ async function createTestTask(title: string): Promise<number> {
 }
 
 before(async () => {
+  // Initialise SQLite avant de construire l'application Express.
+  database = await createDatabase(":memory:");
+  app = createApp(database);
+
   server = app.listen(0);
 
   await new Promise<void>((resolve, reject) => {
@@ -74,7 +83,8 @@ after(async () => {
     });
   });
 
-  database.close();
+  // Attend la fermeture complète de SQLite.
+  await database.close();
 });
 
 test("GET / retourne HTTP 200 et les informations de l'API", async () => {
@@ -476,4 +486,83 @@ test("PATCH /tasks/:id retourne HTTP 404 si la tâche n'existe pas", async () =>
 
   assert.equal(response.status, 404);
   assert.equal(body.error, "La tâche demandée est introuvable.");
+});
+
+// ============================================================
+// Tests de persistance locale des données (US9).
+// ============================================================
+
+test("La base conserve les tâches après fermeture et réouverture", async () => {
+  // Crée un répertoire temporaire isolé pour ce test.
+  const temporaryDirectory = await mkdtemp(
+    join(tmpdir(), "inf1763-us9-"),
+  );
+
+  const databasePath = join(
+    temporaryDirectory,
+    "persistence-test.db",
+  );
+
+  let firstDatabase: Awaited<ReturnType<typeof createDatabase>> | undefined;
+  let reopenedDatabase: Awaited<ReturnType<typeof createDatabase>> | undefined;
+
+  try {
+    // Ouvre une première connexion sur un fichier SQLite.
+    firstDatabase = await createDatabase(databasePath);
+
+    const firstRepository = new TaskRepository(firstDatabase);
+
+    // Insère une tâche avec une date d'échéance.
+    const createdTask = await firstRepository.createTask(
+      "Tâche de test de persistance",
+      "Cette tâche doit survivre à la fermeture de la base.",
+      "2026-12-08",
+    );
+
+    // Modifie son état pour vérifier également cette propriété.
+    const updatedTask = await firstRepository.setTaskCompleted(
+      createdTask.id,
+      true,
+    );
+
+    assert.ok(updatedTask);
+    assert.equal(updatedTask.completed, true);
+
+    // Ferme complètement la première connexion.
+    await firstDatabase.close();
+    firstDatabase = undefined;
+
+    // Rouvre le même fichier avec une nouvelle connexion.
+    reopenedDatabase = await createDatabase(databasePath);
+
+    const reopenedRepository = new TaskRepository(reopenedDatabase);
+
+    const restoredTask = await reopenedRepository.getTaskById(
+      createdTask.id,
+    );
+
+    // Vérifie la conservation de toutes les propriétés importantes.
+    assert.ok(restoredTask);
+    assert.equal(restoredTask.id, createdTask.id);
+    assert.equal(restoredTask.title, createdTask.title);
+    assert.equal(restoredTask.description, createdTask.description);
+    assert.equal(restoredTask.createdAt, createdTask.createdAt);
+    assert.equal(restoredTask.dueDate, "2026-12-08");
+    assert.equal(restoredTask.completed, true);
+  } finally {
+    // Ferme les connexions encore ouvertes.
+    if (firstDatabase) {
+      await firstDatabase.close();
+    }
+
+    if (reopenedDatabase) {
+      await reopenedDatabase.close();
+    }
+
+    // Supprime le répertoire temporaire.
+    await rm(temporaryDirectory, {
+      recursive: true,
+      force: true,
+    });
+  }
 });
