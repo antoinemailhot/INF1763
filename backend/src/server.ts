@@ -1,5 +1,7 @@
 import express from "express";
-import type Database from "better-sqlite3";
+import type { Database } from "@tursodatabase/database" with {
+  "resolution-mode": "import"
+};
 import { createDatabase } from "./database";
 import { TaskRepository } from "./taskRepository";
 
@@ -35,8 +37,8 @@ function parseTaskId(rawId: string): { id: number } | { error: string } {
   return { id };
 }
 
-// Crée une application Express avec une connexion SQLite injectée.
-export function createApp(database: Database.Database) {
+// Crée une application Express avec une connexion Turso injectée.
+export function createApp(database: Database) {
   const app = express();
   const taskRepository = new TaskRepository(database);
 
@@ -66,22 +68,22 @@ export function createApp(database: Database.Database) {
   });
 
   // Retourne toutes les tâches enregistrées dans SQLite.
-  app.get("/tasks", (_req, res) => {
-    const tasks = taskRepository.getAllTasks();
+  app.get("/tasks", async (_req, res) => {
+    const tasks = await taskRepository.getAllTasks();
 
     return res.status(200).json(tasks);
   });
 
   // Supprime définitivement une tâche à partir de son identifiant.
-  app.delete("/tasks/:id", (req, res) => {
+  app.delete("/tasks/:id", async (req, res) => {
     const parsedId = parseTaskId(req.params.id);
 
     if ("error" in parsedId) {
       return res.status(400).json({ error: parsedId.error });
     }
 
-    // Effectue la suppression dans SQLite.
-    const deleted = taskRepository.deleteTask(parsedId.id);
+    // Attend la suppression dans SQLite.
+    const deleted = await taskRepository.deleteTask(parsedId.id);
 
     // Retourne 404 si aucune tâche ne correspond à cet identifiant.
     if (!deleted) {
@@ -95,7 +97,7 @@ export function createApp(database: Database.Database) {
   });
 
   // Marque une tâche comme complétée ou non complétée (US11).
-  app.patch("/tasks/:id", (req, res) => {
+  app.patch("/tasks/:id", async (req, res) => {
     const parsedId = parseTaskId(req.params.id);
 
     if ("error" in parsedId) {
@@ -118,8 +120,11 @@ export function createApp(database: Database.Database) {
 
     const completed = (body as { completed: boolean }).completed;
 
-    // Enregistre le nouvel état dans SQLite.
-    const updatedTask = taskRepository.setTaskCompleted(parsedId.id, completed);
+    // Attend l'enregistrement du nouvel état dans SQLite.
+    const updatedTask = await taskRepository.setTaskCompleted(
+      parsedId.id,
+      completed,
+    );
 
     if (!updatedTask) {
       return res.status(404).json({
@@ -131,7 +136,7 @@ export function createApp(database: Database.Database) {
   });
 
   // Valide et enregistre une nouvelle tâche dans SQLite.
-  app.post("/tasks", (req, res) => {
+  app.post("/tasks", async (req, res) => {
     const body: unknown = req.body;
 
     // Vérifie que le corps de la requête est un objet JSON.
@@ -187,8 +192,8 @@ export function createApp(database: Database.Database) {
       dueDate = task.dueDate;
     }
 
-    // Enregistre la tâche et retourne les données créées.
-    const createdTask = taskRepository.createTask(
+    // Attend la création de la tâche avant de répondre au client.
+    const createdTask = await taskRepository.createTask(
       title,
       description,
       dueDate,
@@ -201,12 +206,84 @@ export function createApp(database: Database.Database) {
 }
 
 // Démarre le serveur uniquement lorsque ce fichier est exécuté directement.
-if (require.main === module) {
+async function startServer(): Promise<void> {
   const port = Number(process.env.PORT ?? 3000);
-  const database = createDatabase();
-  const app = createApp(database);
 
-  app.listen(port, () => {
-    console.log(`API PrêtMatériel démarrée sur http://localhost:${port}`);
+  // Attend l'ouverture de la connexion et l'initialisation de la base.
+  const database = await createDatabase();
+
+  const app = createApp(database);
+  const server = app.listen(port);
+
+  // Attend que le serveur HTTP soit effectivement prêt.
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("listening", resolve);
+      server.once("error", reject);
+    });
+  } catch (error) {
+    // Libère la base si le serveur HTTP ne peut pas démarrer.
+    await database.close();
+    throw error;
+  }
+
+  console.log(`API PrêtMatériel démarrée sur http://localhost:${port}`);
+
+  let shutdownPromise: Promise<void> | undefined;
+
+  // Arrête proprement le serveur et ferme ensuite la base.
+  function shutdown(signal: NodeJS.Signals): Promise<void> {
+    // Empêche plusieurs signaux de déclencher plusieurs fermetures.
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    shutdownPromise = (async () => {
+      console.log(`Signal ${signal} reçu. Arrêt du serveur...`);
+
+      try {
+        // server.close() cesse d'accepter de nouvelles connexions
+        // et attend la fin des connexions HTTP actives.
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+
+            resolve();
+          });
+        });
+      } finally {
+        // Ferme la connexion SQLite après l'arrêt HTTP.
+        await database.close();
+        console.log("Connexion à la base de données fermée.");
+      }
+    })();
+
+    return shutdownPromise;
+  }
+
+  // Enregistre les gestionnaires d'arrêt du processus.
+  process.once("SIGINT", () => {
+    void shutdown("SIGINT").catch((error: unknown) => {
+      console.error("Erreur pendant l'arrêt du serveur :", error);
+      process.exitCode = 1;
+    });
+  });
+
+  process.once("SIGTERM", () => {
+    void shutdown("SIGTERM").catch((error: unknown) => {
+      console.error("Erreur pendant l'arrêt du serveur :", error);
+      process.exitCode = 1;
+    });
+  });
+}
+
+// Gère les erreurs de démarrage.
+if (require.main === module) {
+  void startServer().catch((error: unknown) => {
+    console.error("Impossible de démarrer l'API PrêtMatériel :", error);
+    process.exitCode = 1;
   });
 }

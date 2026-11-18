@@ -15,11 +15,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "@tursodatabase/database": "^0.8.3",
     "express": "^5.3.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
     "tsx": "^4.23.15",
