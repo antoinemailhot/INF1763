@@ -95,6 +95,8 @@ function App() {
 
   // Identifiant de la tâche en cours de suppression.
   const [deletingTaskId, setDeletingTaskId] = useState<number | null>(null)
+  // Tâche pour laquelle le dialogue de confirmation est ouvert.
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null)
 
   // Identifiant de la tâche dont l'état complété est en cours d'enregistrement.
   const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null)
@@ -105,6 +107,8 @@ function App() {
 
   // Référence au champ titre pour y replacer le curseur après une création.
   const titleInputRef = useRef<HTMLInputElement>(null)
+  // Référence vers le dialogue natif de confirmation.
+  const deleteDialogRef = useRef<HTMLDialogElement>(null)
   const shouldFocusTitleRef = useRef(false)
 
   // Replace le curseur dans le titre une fois le champ réactivé (US10).
@@ -114,6 +118,20 @@ function App() {
       titleInputRef.current?.focus()
     }
   }, [isSubmitting])
+  // Synchronise l'ouverture native du dialogue avec l'état React.
+  useEffect(() => {
+    const dialog = deleteDialogRef.current
+
+    if (!dialog) {
+      return
+    }
+
+    if (taskToDelete && !dialog.open) {
+      dialog.showModal()
+    } else if (!taskToDelete && dialog.open) {
+      dialog.close()
+    }
+  }, [taskToDelete])
 
   useEffect(() => {
     let active = true
@@ -254,19 +272,28 @@ function App() {
     }
   }
 
-  // Demande confirmation, puis supprime la tâche après validation du serveur.
-  async function handleDelete(task: Task) {
-    // Empêche une autre suppression pendant une requête en cours.
-    if (deletingTaskId !== null || isSubmitting) {
+  // Ouvre le dialogue sans déclencher de requête API.
+  function handleDelete(task: Task) {
+    // Empêche une ouverture pendant une autre opération.
+    if (
+      deletingTaskId !== null ||
+      isSubmitting ||
+      taskToDelete !== null
+    ) {
       return
     }
 
-    const confirmed = window.confirm(
-      `Voulez-vous vraiment supprimer définitivement la tâche « ${task.title} » ? Cette action est irréversible.`,
-    )
+    setDeleteError('')
+    setTaskToDelete(task)
+  }
 
-    // Une annulation ne déclenche aucune requête API.
-    if (!confirmed) {
+  // Supprime la tâche uniquement après confirmation explicite.
+  async function confirmDelete() {
+    const task = taskToDelete
+
+    // Vérifie qu'une tâche est sélectionnée et qu'aucune suppression
+    // ou création n'est déjà en cours.
+    if (!task || deletingTaskId !== null || isSubmitting) {
       return
     }
 
@@ -297,8 +324,12 @@ function App() {
       if (tasks.length === 1) {
         setTasksStatus('empty')
       }
+
+      // Ferme le dialogue après une suppression réussie.
+      setTaskToDelete(null)
     } catch (error) {
       // En cas d'erreur, la tâche demeure dans la liste.
+      // Le dialogue reste ouvert pour permettre une nouvelle tentative.
       setDeleteError(
         error instanceof Error
           ? error.message
@@ -308,7 +339,6 @@ function App() {
       setDeletingTaskId(null)
     }
   }
-
   // Inverse l'état complété d'une tâche après validation du serveur (US11).
   async function handleToggleCompleted(task: Task) {
     setToggleError('')
@@ -624,6 +654,73 @@ function App() {
         </section>
       </main>
 
+      {/* Dialogue de confirmation de suppression (US12). */}
+      <dialog
+        ref={deleteDialogRef}
+        className="delete-dialog"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-dialog-title"
+        aria-describedby="delete-dialog-description"
+        onCancel={(event) => {
+          // Empêche la fermeture native pour conserver React comme source de vérité.
+          event.preventDefault()
+
+          // Échap ne ferme pas le dialogue pendant une suppression.
+          if (deletingTaskId === null) {
+            setTaskToDelete(null)
+          }
+        }}
+      >
+        <div className="delete-dialog__content">
+          <h2 id="delete-dialog-title">
+            Confirmer la suppression
+          </h2>
+
+          <p id="delete-dialog-description">
+            Voulez-vous vraiment supprimer définitivement la tâche
+            {' '}
+            <strong>« {taskToDelete?.title} »</strong> ?
+            Cette action est irréversible.
+          </p>
+
+          {deleteError && (
+            <p
+              className="form-feedback form-feedback--error delete-feedback"
+              role="alert"
+            >
+              {deleteError}
+            </p>
+          )}
+
+          <div className="delete-dialog__actions">
+            <button
+              className="delete-dialog__cancel"
+              type="button"
+              autoFocus
+              onClick={() => {
+                if (deletingTaskId === null) {
+                  setTaskToDelete(null)
+                }
+              }}
+              disabled={deletingTaskId !== null}
+            >
+              Annuler
+            </button>
+
+            <button
+              className="delete-dialog__confirm"
+              type="button"
+              onClick={() => void confirmDelete()}
+              disabled={deletingTaskId !== null || isSubmitting}
+            >
+              {deletingTaskId !== null
+                ? 'Suppression...'
+                : 'Confirmer la suppression'}
+            </button>
+          </div>
+        </div>
+      </dialog>
       <footer className="site-footer">
         <span>PrêtMatériel</span>
         <span>Une base simple pour mieux gérer les prêts.</span>
