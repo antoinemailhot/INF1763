@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { apiFetch } from './api'
+import { apiFetch, isNetworkError, NETWORK_ERROR_MESSAGE } from './api'
 import './App.css'
 
 type ApiStatus = 'loading' | 'available' | 'unavailable'
@@ -82,6 +82,7 @@ async function getErrorMessage(
 
 function App() {
   const [apiStatus, setApiStatus] = useState<ApiStatus>('loading')
+  const [networkError, setNetworkError] = useState('')
   const [tasksStatus, setTasksStatus] = useState<TasksStatus>('loading')
   const [tasks, setTasks] = useState<Task[]>([])
 
@@ -257,7 +258,7 @@ function App() {
 
       // Ajoute immédiatement la tâche à la liste sans recharger la page.
       setTasks((currentTasks) => [createdTask, ...currentTasks])
-      setTasksStatus('loaded')
+      setNetworkError(''); setApiStatus('available'); setTasksStatus('loaded')
 
       // Réinitialise les champs après une création réussie.
       setTitle('')
@@ -267,11 +268,17 @@ function App() {
 
       setFormSuccess('La tâche a été créée avec succès.')
     } catch (error) {
-      setFormError(
-        error instanceof Error
-          ? error.message
-          : 'Une erreur inattendue est survenue.',
-      )
+      if (isNetworkError(error)) {
+        setApiStatus('unavailable')
+        setNetworkError(NETWORK_ERROR_MESSAGE)
+        setFormError(NETWORK_ERROR_MESSAGE)
+      } else {
+        setFormError(
+          error instanceof Error
+            ? error.message
+            : 'Une erreur inattendue est survenue.',
+        )
+      }
     } finally {
       setIsSubmitting(false)
     }
@@ -335,11 +342,17 @@ function App() {
     } catch (error) {
       // En cas d'erreur, la tâche demeure dans la liste.
       // Le dialogue reste ouvert pour permettre une nouvelle tentative.
-      setDeleteError(
-        error instanceof Error
-          ? error.message
-          : 'Une erreur inattendue est survenue pendant la suppression.',
-      )
+      if (isNetworkError(error)) {
+        setApiStatus('unavailable')
+        setNetworkError(NETWORK_ERROR_MESSAGE)
+        setDeleteError(NETWORK_ERROR_MESSAGE)
+      } else {
+        setDeleteError(
+          error instanceof Error
+            ? error.message
+            : 'Une erreur inattendue est survenue pendant la suppression.',
+        )
+      }
     } finally {
       setDeletingTaskId(null)
     }
@@ -385,7 +398,13 @@ function App() {
       setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)))
       setEditingTaskId(null)
     } catch (error) {
-      setEditError(error instanceof Error ? error.message : 'Erreur inattendue.')
+      if (isNetworkError(error)) {
+        setApiStatus('unavailable')
+        setNetworkError(NETWORK_ERROR_MESSAGE)
+        setEditError(NETWORK_ERROR_MESSAGE)
+      } else {
+        setEditError(error instanceof Error ? error.message : 'Erreur inattendue.')
+      }
     } finally {
       setIsSavingEdit(false)
     }
@@ -427,11 +446,17 @@ function App() {
       )
     } catch (error) {
       // En cas d'erreur, la case conserve son état précédent.
-      setToggleError(
-        error instanceof Error
-          ? error.message
-          : 'Une erreur inattendue est survenue pendant la mise à jour.',
-      )
+      if (isNetworkError(error)) {
+        setApiStatus('unavailable')
+        setNetworkError(NETWORK_ERROR_MESSAGE)
+        setToggleError(NETWORK_ERROR_MESSAGE)
+      } else {
+        setToggleError(
+          error instanceof Error
+            ? error.message
+            : 'Une erreur inattendue est survenue pendant la mise à jour.',
+        )
+      }
     } finally {
       setTogglingTaskId(null)
     }
@@ -483,6 +508,22 @@ function App() {
             PrêtMatériel est une application conçue pour faciliter la gestion
             du matériel et le suivi des prêts au sein de votre organisation.
           </p>
+
+          {networkError && (
+            <div className="network-banner" role="alert" aria-live="assertive">
+              <div className="network-banner__content">
+                <p className="network-banner__title">Serveur backend inaccessible</p>
+                <p className="network-banner__text">{networkError}</p>
+              </div>
+              <button
+                className="network-banner__close"
+                type="button"
+                onClick={() => setNetworkError('')}
+              >
+                Fermer
+              </button>
+            </div>
+          )}
 
           <div
             className="status-card"
