@@ -91,6 +91,32 @@ export class TaskRepository {
     return row ? toTask(row) : undefined;
   }
 
+  // Modifie le titre et la description d'une tâche existante (US13).
+  // Retourne la tâche mise à jour ou undefined si elle n'existe pas.
+  async updateTask(
+    id: number,
+    title: string,
+    description: string,
+  ): Promise<Task | undefined> {
+
+    const result = await this.database.run(
+      `
+        UPDATE tasks
+        SET title = ?, description = ?
+        WHERE id = ?
+      `,
+      title,
+      description,
+      id,
+    );
+
+    if (result.changes === 0) {
+      return undefined;
+    }
+
+    return this.getTaskById(id);
+  }
+
   // Modifie l'état complété d'une tâche.
   // Retourne la tâche mise à jour ou undefined si elle n'existe pas.
   async setTaskCompleted(
