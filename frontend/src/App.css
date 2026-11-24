@@ -739,3 +739,67 @@ main {
     width: 100%;
   }
 }
+
+/* Formulaire et boutons d'édition en ligne d'une tâche (US13). */
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.edit-button,
+.save-button,
+.cancel-button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.edit-button {
+  border-color: #cbd5e1;
+  color: #1e3a8a;
+  background: #eff6ff;
+}
+
+.edit-button:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #dbeafe;
+}
+
+.save-button {
+  color: #fff;
+  background: #2563eb;
+}
+
+.save-button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.cancel-button {
+  border-color: #cbd5e1;
+  color: #43516a;
+  background: #fff;
+}
+
+.cancel-button:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.edit-button:disabled,
+.save-button:disabled,
+.cancel-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}

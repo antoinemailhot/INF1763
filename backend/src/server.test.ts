@@ -566,3 +566,73 @@ test("La base conserve les tâches après fermeture et réouverture", async () =
     });
   }
 });
+
+test("PUT /tasks/:id met à jour le titre et la description d'une tâche (US13)", async () => {
+  const createResponse = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Titre initial",
+      description: "Description initiale",
+    }),
+  });
+
+  assert.equal(createResponse.status, 201);
+  const created = (await createResponse.json()) as { id: number };
+
+  const updateResponse = await fetch(`${baseUrl}/tasks/${created.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "  Titre corrigé  ",
+      description: "Nouvelle description",
+    }),
+  });
+
+  assert.equal(updateResponse.status, 200);
+  const updated = (await updateResponse.json()) as {
+    title: string;
+    description: string;
+  };
+
+  assert.equal(updated.title, "Titre corrigé");
+  assert.equal(updated.description, "Nouvelle description");
+});
+
+test("PUT /tasks/:id retourne HTTP 400 si le titre est vide (US13)", async () => {
+  const createResponse = await fetch(`${baseUrl}/tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Tâche valide",
+      description: "Description",
+    }),
+  });
+
+  assert.equal(createResponse.status, 201);
+  const created = (await createResponse.json()) as { id: number };
+
+  const updateResponse = await fetch(`${baseUrl}/tasks/${created.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "   ",
+      description: "Description",
+    }),
+  });
+
+  assert.equal(updateResponse.status, 400);
+});
+
+test("PUT /tasks/:id retourne HTTP 404 si la tâche n'existe pas (US13)", async () => {
+  const response = await fetch(`${baseUrl}/tasks/999999`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Titre",
+      description: "Description",
+    }),
+  });
+
+  assert.equal(response.status, 404);
+});
