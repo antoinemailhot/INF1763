@@ -553,11 +553,6 @@ function App() {
               )}
             </div>
 
-            {deleteError && (
-              <p className="form-feedback form-feedback--error delete-feedback" role="alert">
-                {deleteError}
-              </p>
-            )}
 
             {toggleError && (
               <p className="form-feedback form-feedback--error delete-feedback" role="alert">
@@ -668,6 +663,7 @@ function App() {
 
           // Échap ne ferme pas le dialogue pendant une suppression.
           if (deletingTaskId === null) {
+            setDeleteError('')
             setTaskToDelete(null)
           }
         }}
@@ -700,6 +696,7 @@ function App() {
               autoFocus
               onClick={() => {
                 if (deletingTaskId === null) {
+                  setDeleteError('')
                   setTaskToDelete(null)
                 }
               }}
