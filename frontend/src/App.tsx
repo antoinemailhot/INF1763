@@ -101,6 +101,11 @@ function App() {
   // Identifiant de la tâche dont l'état complété est en cours d'enregistrement.
   const [togglingTaskId, setTogglingTaskId] = useState<number | null>(null)
   const [toggleError, setToggleError] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
 
   // Message d'erreur indépendant de celui du formulaire de création.
   const [deleteError, setDeleteError] = useState('')
@@ -340,6 +345,52 @@ function App() {
     }
   }
   // Inverse l'état complété d'une tâche après validation du serveur (US11).
+  function handleStartEdit(task: Task) {
+    if (isSavingEdit || deletingTaskId !== null || togglingTaskId !== null) return
+    setEditError('')
+    setEditingTaskId(task.id)
+    setEditTitle(task.title)
+    setEditDescription(task.description)
+  }
+
+  function handleCancelEdit() {
+    if (isSavingEdit) return
+    setEditError('')
+    setEditingTaskId(null)
+    setEditTitle('')
+    setEditDescription('')
+  }
+
+  async function handleSaveEdit(taskId: number) {
+    const normalizedTitle = editTitle.trim()
+    if (!normalizedTitle) {
+      setEditError('Le titre est obligatoire.')
+      return
+    }
+    setEditError('')
+    setIsSavingEdit(true)
+    try {
+      const response = await apiFetch(`/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: normalizedTitle, description: editDescription.trim() }),
+      })
+      if (!response.ok) {
+        throw new Error(await getErrorMessage(response, 'Impossible de modifier la tâche'))
+      }
+      const updatedTask: unknown = await response.json()
+      if (!isTask(updatedTask)) {
+        throw new Error('La réponse du serveur contient une tâche invalide.')
+      }
+      setTasks((prev) => prev.map((t) => (t.id === updatedTask.id ? updatedTask : t)))
+      setEditingTaskId(null)
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Erreur inattendue.')
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }
+
   async function handleToggleCompleted(task: Task) {
     setToggleError('')
     setTogglingTaskId(task.id)
@@ -593,14 +644,11 @@ function App() {
                 {tasks.map((task) => {
                   const isDeleting = deletingTaskId === task.id
                   const isToggling = togglingTaskId === task.id
+                  const isEditing = editingTaskId === task.id
 
                   return (
                     <li
-                      className={
-                        task.completed
-                          ? 'task-card task-card--completed'
-                          : 'task-card'
-                      }
+                      className={task.completed ? 'task-card task-card--completed' : 'task-card'}
                       key={task.id}
                     >
                       <div className="task-card-content">
@@ -609,36 +657,72 @@ function App() {
                             type="checkbox"
                             checked={task.completed}
                             onChange={() => void handleToggleCompleted(task)}
-                            disabled={isToggling || isDeleting}
+                            disabled={isToggling || isDeleting || isEditing}
                             aria-label={`Marquer comme complétée : ${task.title}`}
                           />
                           <span>{task.completed ? 'Complétée' : 'À faire'}</span>
                         </label>
 
-                        <h3>{task.title}</h3>
-                        <p>{task.description || 'Aucune description.'}</p>
-
-                        {task.dueDate && (
-                          <p className="task-due-date">
-                            Échéance : {formatDueDate(task.dueDate)}
-                          </p>
+                        {isEditing ? (
+                          <div className="task-edit-form">
+                            <div className="form-field">
+                              <label htmlFor={`edit-title-${task.id}`}>Titre *</label>
+                              <input
+                                id={`edit-title-${task.id}`}
+                                type="text"
+                                value={editTitle}
+                                onChange={(e) => { setEditError(''); setEditTitle(e.target.value) }}
+                                maxLength={200}
+                                disabled={isSavingEdit}
+                              />
+                            </div>
+                            <div className="form-field">
+                              <label htmlFor={`edit-description-${task.id}`}>Description</label>
+                              <textarea
+                                id={`edit-description-${task.id}`}
+                                value={editDescription}
+                                onChange={(e) => { setEditError(''); setEditDescription(e.target.value) }}
+                                rows={3}
+                                disabled={isSavingEdit}
+                              />
+                            </div>
+                            {editError && (
+                              <p className="form-feedback form-feedback--error" role="alert">{editError}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            <h3>{task.title}</h3>
+                            <p>{task.description || 'Aucune description.'}</p>
+                          </>
                         )}
 
-                        <time dateTime={task.createdAt}>
-                          Créée le {formatTaskDate(task.createdAt)}
-                        </time>
+                        {task.dueDate && (
+                          <p className="task-due-date">Échéance : {formatDueDate(task.dueDate)}</p>
+                        )}
+                        <time dateTime={task.createdAt}>Créée le {formatTaskDate(task.createdAt)}</time>
                       </div>
 
                       <div className="task-card-actions">
-                        <button
-                          className="delete-button"
-                          type="button"
-                          onClick={() => void handleDelete(task)}
-                          disabled={deletingTaskId !== null || isSubmitting}
-                          aria-label={`Supprimer la tâche : ${task.title}`}
-                        >
-                          {isDeleting ? 'Suppression...' : 'Supprimer'}
-                        </button>
+                        {isEditing ? (
+                          <>
+                            <button className="save-button" type="button" onClick={() => void handleSaveEdit(task.id)} disabled={isSavingEdit}>
+                              {isSavingEdit ? 'Enregistrement...' : 'Enregistrer'}
+                            </button>
+                            <button className="cancel-button" type="button" onClick={handleCancelEdit} disabled={isSavingEdit}>
+                              Annuler
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button className="edit-button" type="button" onClick={() => handleStartEdit(task)} disabled={deletingTaskId !== null || isSubmitting || isSavingEdit}>
+                              Modifier
+                            </button>
+                            <button className="delete-button" type="button" onClick={() => void handleDelete(task)} disabled={deletingTaskId !== null || isSubmitting || isSavingEdit}>
+                              {isDeleting ? 'Suppression...' : 'Supprimer'}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </li>
                   )
