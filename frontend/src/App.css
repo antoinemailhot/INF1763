@@ -602,3 +602,140 @@ main {
 .delete-feedback {
   margin-bottom: 18px;
 }
+
+/* ============================================================
+   US12 — Dialogue de confirmation de suppression
+   ============================================================ */
+
+/* Fenêtre modale native. */
+.delete-dialog {
+  width: min(520px, calc(100% - 32px));
+  max-width: 520px;
+  max-height: calc(100% - 48px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  color: #17243a;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+/* Arrière-plan assombri derrière la fenêtre modale. */
+.delete-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+/* Contenu intérieur du dialogue. */
+.delete-dialog__content {
+  padding: 32px;
+}
+
+.delete-dialog__content h2 {
+  margin: 0 0 18px;
+  color: #17243a;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.delete-dialog__content > p {
+  margin: 0 0 24px;
+  color: #5c6b80;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.delete-dialog__content strong {
+  color: #17243a;
+  overflow-wrap: anywhere;
+}
+
+/* Zone des boutons d'action. */
+.delete-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+/* Bouton Annuler. */
+.delete-dialog__cancel,
+.delete-dialog__confirm {
+  min-height: 44px;
+  padding: 11px 18px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.delete-dialog__cancel {
+  border-color: #cbd5e1;
+  color: #43516a;
+  background: #fff;
+}
+
+.delete-dialog__cancel:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+/* Bouton de confirmation destructive. */
+.delete-dialog__confirm {
+  color: #fff;
+  background: #dc2626;
+}
+
+.delete-dialog__confirm:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+/* Indication visible du focus clavier. */
+.delete-dialog__cancel:focus-visible,
+.delete-dialog__confirm:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.35);
+  outline-offset: 3px;
+}
+
+/* Désactivation pendant une opération. */
+.delete-dialog__cancel:disabled,
+.delete-dialog__confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Message d'erreur à l'intérieur du dialogue. */
+.delete-dialog .delete-feedback {
+  margin: 0;
+}
+
+/* Adaptation aux petits écrans. */
+@media (max-width: 600px) {
+  .delete-dialog__content {
+    padding: 24px;
+  }
+
+  .delete-dialog__content h2 {
+    font-size: 21px;
+  }
+
+  .delete-dialog__actions {
+    flex-direction: column-reverse;
+  }
+
+  .delete-dialog__cancel,
+  .delete-dialog__confirm {
+    width: 100%;
+  }
+}
